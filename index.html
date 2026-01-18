@@ -256,7 +256,7 @@
         if (e.target === input) {
           e.preventDefault();
           const value = input.value.trim();
-          if (value || gameState.currentPhase === 'intro' || gameState.currentPhase.startsWith('transition') || gameState.currentPhase.startsWith('socratic') && gameState.currentPhase.endsWith('-outro')) {
+          if (value || gameState.currentPhase === 'intro' || gameState.currentPhase.startsWith('transition') || gameState.currentPhase === 'socratic1-intro' || gameState.currentPhase === 'socratic1-outro') {
             processCommand(value);
           }
         } else if (e.target === textarea && !e.shiftKey) {
