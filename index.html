@@ -234,37 +234,38 @@
     // Render functions
     function render(content) {
       gameDiv.innerHTML = content;
-      const input = document.getElementById('input');
-      if (input) {
-        input.focus();
-        input.addEventListener('keydown', handleInput);
-      }
-      const textarea = document.getElementById('textarea');
-      if (textarea) {
-        textarea.focus();
-        textarea.addEventListener('keydown', handleTextarea);
-      }
+      // Use setTimeout to ensure DOM is fully updated before attaching listeners
+      setTimeout(() => {
+        const input = document.getElementById('input');
+        if (input) {
+          input.focus();
+        }
+        const textarea = document.getElementById('textarea');
+        if (textarea) {
+          textarea.focus();
+        }
+      }, 0);
     }
 
-    function handleInput(e) {
+    // Use event delegation on the game container for more reliable event handling
+    gameDiv.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') {
-        e.preventDefault();
         const input = document.getElementById('input');
-        const value = input.value.trim();
-        if (value || gameState.currentPhase === 'intro' || gameState.currentPhase.startsWith('transition')) {
-          processCommand(value);
+        const textarea = document.getElementById('textarea');
+
+        if (e.target === input) {
+          e.preventDefault();
+          const value = input.value.trim();
+          if (value || gameState.currentPhase === 'intro' || gameState.currentPhase.startsWith('transition') || gameState.currentPhase.startsWith('socratic') && gameState.currentPhase.endsWith('-outro')) {
+            processCommand(value);
+          }
+        } else if (e.target === textarea && !e.shiftKey) {
+          e.preventDefault();
+          const value = textarea.value.trim();
+          processSocraticResponse(value);
         }
       }
-    }
-
-    function handleTextarea(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        const textarea = document.getElementById('textarea');
-        const value = textarea.value.trim();
-        processSocraticResponse(value);
-      }
-    }
+    });
 
     // Process commands
     function processCommand(input) {
