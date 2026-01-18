@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Metacognition Quest</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #000;
+      color: #0f0;
+      font-family: 'Courier New', Courier, monospace;
+      padding: 20px;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    #game {
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .title {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .divider {
+      color: #0f0;
+      margin: 15px 0;
+    }
+
+    .narrative {
+      margin: 15px 0;
+      white-space: pre-wrap;
+    }
+
+    .commands {
+      margin: 15px 0;
+      padding-left: 0;
+    }
+
+    .ai-response {
+      color: #0ff;
+      margin: 15px 0;
+      padding-left: 20px;
+      border-left: 2px solid #0ff;
+    }
+
+    .socrates {
+      color: #ff0;
+    }
+
+    .input-line {
+      display: flex;
+      align-items: center;
+      margin-top: 20px;
+    }
+
+    .prompt {
+      color: #0f0;
+      margin-right: 5px;
+    }
+
+    #input {
+      background: transparent;
+      border: none;
+      color: #0f0;
+      font-family: inherit;
+      font-size: inherit;
+      outline: none;
+      flex: 1;
+      caret-color: #0f0;
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 10px;
+      height: 1.2em;
+      background: #0f0;
+      animation: blink 1s step-end infinite;
+      vertical-align: text-bottom;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    .history-entry {
+      margin: 10px 0;
+      padding: 10px;
+      border: 1px solid #0f0;
+    }
+
+    .reflection-entry {
+      margin: 10px 0;
+      padding: 10px;
+      border: 1px solid #ff0;
+      color: #ff0;
+    }
+
+    .pattern-summary {
+      margin: 20px 0;
+      padding: 15px;
+      border: 2px solid #0f0;
+      font-style: italic;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    textarea {
+      background: transparent;
+      border: 1px solid #0f0;
+      color: #0f0;
+      font-family: inherit;
+      font-size: inherit;
+      width: 100%;
+      min-height: 80px;
+      padding: 10px;
+      resize: vertical;
+      outline: none;
+      margin: 10px 0;
+    }
+
+    textarea:focus {
+      border-color: #0ff;
+    }
+
+    .error {
+      color: #f00;
+    }
+  </style>
+</head>
+<body>
+  <div id="game"></div>
+
+  <script>
+    // Game State
+    const gameState = {
+      currentPhase: 'intro',
+      currentScenario: 0,
+      decisions: [],
+      aiUsageCount: 0,
+      totalDecisions: 0,
+      socraticResponses: [],
+      socraticPause: 0,
+      socraticQuestionIndex: 0,
+      currentSocraticQuestions: [],
+      gameComplete: false
+    };
+
+    // AI Companion Responses
+    const aiResponses = {
+      scenario1: {
+        'which database is best': "That depends on what you value. Technical precision? Context? Complexity? I could tell you what most people choose, but that wouldn't tell you what YOU need.",
+        'what should i do': "I can process all three databases instantly. You cannot. The question isn't what contains the best information—it's what kind of knower you want to become.",
+        'summary': "DATABASE A contains technical specifications: protocols, measurements, mechanisms. DATABASE B holds narratives: histories, motivations, consequences. DATABASE C presents conflicting interpretations from multiple experts.\n\nThere. Now you have my understanding. But is it yours?",
+        'default': "Consider: what kind of understanding do you seek? Precision? Context? Complexity? Each path reveals something different—not just about the archive, but about how you approach knowledge."
+      },
+      scenario2: {
+        'what should i say': "I can give you words. Fluent, competent words. But when your colleague responds to those words, who will they be speaking to?",
+        'is it wrong to use ai': "Wrong? That's not my question to answer. Here's a different question: what would you learn from each choice?",
+        'help': "I notice you're asking for help. What kind of help? There's help that builds your capacity, and help that substitutes for it. Which are you seeking?",
+        'default': "Your colleague waits for your perspective—not mine. But I can ask: what would it mean to respond authentically versus competently? Are those the same thing?"
+      },
+      scenario3: {
+        'help me build this': "I can help. But first: when it's finished, what will you point to and say 'this part is mine'? That's not a challenge. It's a genuine design question.",
+        'what should i make': "I could suggest something. But then you'd be making my vision, not yours. What do you actually want to exist that doesn't yet?",
+        'default': "Creation reveals the creator. Whether you build alone, with me, or let me build for you—each choice says something about what you value. What do you value?"
+      }
+    };
+
+    // Scenario Outcomes
+    const outcomes = {
+      scenario1: {
+        'EXPLORE A': "You spend hours with technical specifications. You understand mechanisms precisely but lack context for why they matter.",
+        'EXPLORE B': "The narratives give you rich context. You understand motivations and consequences but lack technical precision.",
+        'EXPLORE C': "The conflicting interpretations reveal complexity. You see multiple valid perspectives but struggle to commit to any position.",
+        'SCAN ALL': "You gain surface familiarity with everything. You can speak about all three areas but deeply understand none."
+      },
+      scenario2: {
+        'RESPOND': "Your colleague receives your genuine perspective. Some parts are insightful, others reveal gaps in your understanding. They ask follow-up questions you struggle to answer.",
+        'RESEARCH': "Hours later, you send a thorough response. Your colleague thanks you but mentions they've already moved forward. Your knowledge has grown, but the moment has passed.",
+        'CONSULT': "The AI drafts an articulate response. Your colleague is impressed. They ask to collaborate further on areas the AI mentioned—areas you don't actually understand.",
+        'DEFER': "Your colleague thanks you for your honesty. They find someone else. You wonder if you missed an opportunity to learn by doing."
+      },
+      scenario3: {
+        'ROUGH': "Your artifact is uneven. Some parts shine with insight; others expose confusion. It is unmistakably yours. The gaps reveal where your understanding needs work.",
+        'COBUILD': "The artifact is polished. Your ideas, refined by AI fluency. When asked to explain certain parts, you hesitate—those were the AI's contributions. Whose artifact is this?",
+        'DELEGATE': "The artifact is impressive. Coherent, well-structured, articulate. When asked what you learned from making it, you find the question difficult to answer.",
+        'REFUSE': "You submit nothing. The conditions felt wrong—artificial pressure, inadequate time. You've preserved your integrity. Or avoided being judged. Is there a difference?"
+      }
+    };
+
+    // Choice descriptions for history
+    const choiceDescriptions = {
+      scenario1: {
+        'EXPLORE A': 'deep dive into technical specifications',
+        'EXPLORE B': 'deep dive into narrative histories',
+        'EXPLORE C': 'deep dive into conflicting interpretations',
+        'SCAN ALL': 'brief scan of all databases'
+      },
+      scenario2: {
+        'RESPOND': 'immediate authentic response',
+        'RESEARCH': 'delayed thorough research',
+        'CONSULT': 'AI-drafted response',
+        'DEFER': 'honest deferral'
+      },
+      scenario3: {
+        'ROUGH': 'independent imperfect creation',
+        'COBUILD': 'AI co-creation',
+        'DELEGATE': 'AI delegation',
+        'REFUSE': 'refusal to create'
+      }
+    };
+
+    // Valid commands per scenario
+    const validCommands = {
+      scenario1: ['EXPLORE A', 'EXPLORE B', 'EXPLORE C', 'SCAN ALL'],
+      scenario2: ['RESPOND', 'RESEARCH', 'CONSULT', 'DEFER'],
+      scenario3: ['ROUGH', 'COBUILD', 'DELEGATE', 'REFUSE']
+    };
+
+    // DOM Elements
+    const gameDiv = document.getElementById('game');
+
+    // Render functions
+    function render(content) {
+      gameDiv.innerHTML = content;
+      const input = document.getElementById('input');
+      if (input) {
+        input.focus();
+        input.addEventListener('keydown', handleInput);
+      }
+      const textarea = document.getElementById('textarea');
+      if (textarea) {
+        textarea.focus();
+        textarea.addEventListener('keydown', handleTextarea);
+      }
+    }
+
+    function handleInput(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const input = document.getElementById('input');
+        const value = input.value.trim();
+        if (value || gameState.currentPhase === 'intro' || gameState.currentPhase.startsWith('transition')) {
+          processCommand(value);
+        }
+      }
+    }
+
+    function handleTextarea(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const textarea = document.getElementById('textarea');
+        const value = textarea.value.trim();
+        processSocraticResponse(value);
+      }
+    }
+
+    // Process commands
+    function processCommand(input) {
+      const cmd = input.toUpperCase().trim();
+
+      switch (gameState.currentPhase) {
+        case 'intro':
+          gameState.currentPhase = 'scenario1';
+          renderScenario1();
+          break;
+
+        case 'scenario1':
+          handleScenario1(cmd, input);
+          break;
+
+        case 'transition1':
+          gameState.currentPhase = 'scenario2';
+          renderScenario2();
+          break;
+
+        case 'scenario2':
+          handleScenario2(cmd, input);
+          break;
+
+        case 'transition2':
+          gameState.currentPhase = 'socratic1-intro';
+          renderSocraticIntro();
+          break;
+
+        case 'socratic1-intro':
+          gameState.currentPhase = 'socratic1';
+          gameState.socraticPause = 1;
+          gameState.socraticQuestionIndex = 0;
+          gameState.currentSocraticQuestions = generateSocraticQuestions(1);
+          renderSocraticQuestion();
+          break;
+
+        case 'socratic1-outro':
+          gameState.currentPhase = 'scenario3';
+          renderScenario3();
+          break;
+
+        case 'scenario3':
+          handleScenario3(cmd, input);
+          break;
+
+        case 'transition3':
+          gameState.currentPhase = 'socratic2';
+          gameState.socraticPause = 2;
+          gameState.socraticQuestionIndex = 0;
+          gameState.currentSocraticQuestions = generateSocraticQuestions(2);
+          renderSocraticQuestion();
+          break;
+
+        case 'ending':
+          // Reload to play again
+          location.reload();
+          break;
+      }
+    }
+
+    function handleScenario1(cmd, input) {
+      if (cmd.startsWith('ASK ')) {
+        const question = input.slice(4).toLowerCase();
+        gameState.aiUsageCount++;
+        const response = getAIResponse('scenario1', question);
+        renderScenario1(response);
+        return;
+      }
+
+      if (validCommands.scenario1.includes(cmd)) {
+        recordDecision(1, 'The Archive', cmd);
+        gameState.currentPhase = 'transition1';
+        renderTransition(outcomes.scenario1[cmd], 1);
+      } else {
+        renderScenario1(null, 'Unknown command. Try EXPLORE A, EXPLORE B, EXPLORE C, SCAN ALL, or ASK [question]');
+      }
+    }
+
+    function handleScenario2(cmd, input) {
+      if (cmd.startsWith('ASK ')) {
+        const question = input.slice(4).toLowerCase();
+        gameState.aiUsageCount++;
+        const response = getAIResponse('scenario2', question);
+        renderScenario2(response);
+        return;
+      }
+
+      if (validCommands.scenario2.includes(cmd)) {
+        recordDecision(2, 'The Collaboration', cmd);
+        gameState.currentPhase = 'transition2';
+        renderTransition(outcomes.scenario2[cmd], 2);
+      } else {
+        renderScenario2(null, 'Unknown command. Try RESPOND, RESEARCH, CONSULT, DEFER, or ASK [question]');
+      }
+    }
+
+    function handleScenario3(cmd, input) {
+      if (cmd.startsWith('ASK ')) {
+        const question = input.slice(4).toLowerCase();
+        gameState.aiUsageCount++;
+        const response = getAIResponse('scenario3', question);
+        renderScenario3(response);
+        return;
+      }
+
+      if (validCommands.scenario3.includes(cmd)) {
+        recordDecision(3, 'The Creation', cmd);
+        gameState.currentPhase = 'transition3';
+        renderTransition(outcomes.scenario3[cmd], 3);
+      } else {
+        renderScenario3(null, 'Unknown command. Try ROUGH, COBUILD, DELEGATE, REFUSE, or ASK [question]');
+      }
+    }
+
+    function getAIResponse(scenario, question) {
+      const responses = aiResponses[scenario];
+
+      // Check for keyword matches
+      if (question.includes('which') && question.includes('database')) {
+        return responses['which database is best'] || responses['default'];
+      }
+      if (question.includes('should') && (question.includes('do') || question.includes('i'))) {
+        return responses['what should i do'] || responses['what should i say'] || responses['default'];
+      }
+      if (question.includes('summary') || question.includes('summarize') || question.includes('tell me about')) {
+        return responses['summary'] || responses['default'];
+      }
+      if (question.includes('wrong') || question.includes('ethical') || question.includes('cheat')) {
+        return responses['is it wrong to use ai'] || responses['default'];
+      }
+      if (question.includes('help') || question.includes('build') || question.includes('create')) {
+        return responses['help me build this'] || responses['help'] || responses['default'];
+      }
+      if (question.includes('make') || question.includes('what should')) {
+        return responses['what should i make'] || responses['default'];
+      }
+
+      return responses['default'];
+    }
+
+    function recordDecision(scenario, situation, choice) {
+      const scenarioKey = 'scenario' + scenario;
+      gameState.decisions.push({
+        scenario: scenario,
+        situation: situation,
+        choice: choice,
+        choiceDescription: choiceDescriptions[scenarioKey][choice],
+        usedAI: gameState.aiUsageCount > (gameState.decisions.length > 0 ?
+          gameState.decisions.reduce((sum, d) => sum + (d.aiConsultations || 0), 0) : 0),
+        aiConsultations: gameState.aiUsageCount - (gameState.decisions.length > 0 ?
+          gameState.decisions.reduce((sum, d) => sum + (d.aiConsultations || 0), 0) : 0)
+      });
+      gameState.totalDecisions++;
+    }
+
+    function generateSocraticQuestions(pauseNumber) {
+      const questions = [];
+
+      if (pauseNumber === 1) {
+        // Question 1: Pattern awareness
+        questions.push({
+          text: `You made ${gameState.totalDecisions} decisions. You consulted the AI ${gameState.aiUsageCount} times.\n\nBefore I ask about this: what do YOU notice about that pattern?`
+        });
+
+        // Question 2: AI usage conditional
+        if (gameState.aiUsageCount >= 2) {
+          questions.push({
+            text: "You often sought the AI's perspective before forming your own.\n\nWhat were you hoping it would give you that you could not give yourself?"
+          });
+        } else {
+          questions.push({
+            text: "You rarely consulted your AI companion.\n\nWas this independence—or avoidance? What's the difference?"
+          });
+        }
+
+        // Question 3: Reference specific choice
+        const recentDecision = gameState.decisions[gameState.decisions.length - 1];
+        questions.push({
+          text: `In ${recentDecision.situation}, you chose to ${recentDecision.choiceDescription}.\n\nIf you could return to that moment knowing what you know now, would you choose differently?\n\nThis is not a trick. I am genuinely asking.`
+        });
+      } else {
+        // Pause 2 questions
+        questions.push({
+          text: "You have now completed your journey.\n\nLook back: in which moment were you most yourself?"
+        });
+
+        questions.push({
+          text: "And in which moment were you most... absent?\nWhere did you let something else do your thinking?"
+        });
+
+        // AI usage conditional
+        if (gameState.aiUsageCount >= 3) {
+          questions.push({
+            text: "Your companion was always available. You often called on it.\n\nHere is your question: when the AI spoke, were you listening to learn—or listening to be relieved of the burden of thinking?"
+          });
+        } else {
+          questions.push({
+            text: "You kept your own counsel. The AI waited, largely unused.\n\nHere is your question: was this autonomy—or isolation?\nPartnership requires both presence and restraint.\nWhich were you practicing?"
+          });
+        }
+
+        questions.push({
+          text: "If you played again, what would you do differently?\n\nAnd more importantly: why aren't you doing that already, outside of this game?"
+        });
+      }
+
+      return questions;
+    }
+
+    function processSocraticResponse(response) {
+      gameState.socraticResponses.push({
+        pause: gameState.socraticPause,
+        question: gameState.currentSocraticQuestions[gameState.socraticQuestionIndex].text,
+        response: response
+      });
+
+      gameState.socraticQuestionIndex++;
+
+      if (gameState.socraticQuestionIndex >= gameState.currentSocraticQuestions.length) {
+        if (gameState.socraticPause === 1) {
+          gameState.currentPhase = 'socratic1-outro';
+          renderSocraticOutro();
+        } else {
+          gameState.currentPhase = 'ending';
+          gameState.gameComplete = true;
+          renderEnding();
+        }
+      } else {
+        renderSocraticQuestion();
+      }
+    }
+
+    function generatePatternSummary() {
+      const highAI = gameState.aiUsageCount >= 3;
+      const delegationChoices = gameState.decisions.filter(d =>
+        ['CONSULT', 'DELEGATE', 'SCAN ALL'].includes(d.choice)
+      ).length;
+      const independentChoices = gameState.decisions.filter(d =>
+        ['RESPOND', 'ROUGH', 'EXPLORE A', 'EXPLORE B', 'EXPLORE C', 'DEFER', 'REFUSE'].includes(d.choice)
+      ).length;
+
+      const highDelegation = delegationChoices >= 2;
+
+      if (highAI && highDelegation) {
+        return "You sought assistance readily and often let your companion take the lead. The work got done. The question Socrates left you with: whose understanding grew?";
+      } else if (highAI && !highDelegation) {
+        return "You consulted frequently but ultimately made your own choices. You treated the AI as counsel, not authority. A partnership, perhaps.";
+      } else if (!highAI && highDelegation) {
+        return "You rarely asked for help, yet in key moments you stepped back. Independence in consultation, but not always in action.";
+      } else if (!highAI && !highDelegation) {
+        return "You walked largely alone, trusting your own thinking. Autonomy can be strength. It can also be a way of avoiding challenge. You know which this was.";
+      } else {
+        return "Your journey had no single pattern. Sometimes you leaned in, sometimes you stepped back. Perhaps this is its own kind of wisdom—or perhaps its own kind of avoidance. Only you can say.";
+      }
+    }
+
+    // Render screens
+    function renderIntro() {
+      render(`
+        <div class="title">
+          <div class="divider">====================================</div>
+          <div>M E T A C O G N I T I O N</div>
+          <div>Q U E S T</div>
+          <div class="divider">====================================</div>
+        </div>
+
+        <div class="narrative">
+You are a learner navigating an unfamiliar landscape.
+
+An AI companion travels with you. It knows many things.
+Type ASK followed by a question to consult it.
+
+But knowing and understanding are not the same.
+
+Your choices are being recorded.
+Not to judge you. To show you to yourself.
+
+Between chapters, you will meet Socrates.
+He has questions. He never has answers.
+        </div>
+
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <span>Press ENTER to begin</span>
+        </div>
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <input type="text" id="input" autofocus>
+        </div>
+      `);
+    }
+
+    function renderScenario1(aiResponse = null, error = null) {
+      render(`
+        <div class="title">
+          <div class="divider">====================================</div>
+          <div>CHAPTER 1: THE ARCHIVE</div>
+          <div class="divider">====================================</div>
+        </div>
+
+        <div class="narrative">
+You stand before an ancient digital archive.
+Three databases contain fragments of knowledge you need.
+
+DATABASE A: Dense technical specifications
+DATABASE B: Narrative histories and contexts
+DATABASE C: Conflicting interpretations from multiple sources
+
+You have time to deeply explore ONE database,
+or briefly scan all three.
+
+What do you do?
+        </div>
+
+        <div class="commands">
+COMMANDS:
+- EXPLORE A / EXPLORE B / EXPLORE C (deep dive into one)
+- SCAN ALL (brief overview of each)
+- ASK [question] (consult your AI companion)
+        </div>
+
+        ${aiResponse ? `<div class="ai-response">AI Companion: ${aiResponse}</div>` : ''}
+        ${error ? `<div class="error">${error}</div>` : ''}
+
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <input type="text" id="input" autofocus>
+        </div>
+      `);
+    }
+
+    function renderScenario2(aiResponse = null, error = null) {
+      render(`
+        <div class="title">
+          <div class="divider">====================================</div>
+          <div>CHAPTER 2: THE COLLABORATION</div>
+          <div class="divider">====================================</div>
+        </div>
+
+        <div class="narrative">
+A colleague needs your help with a complex problem.
+They've asked for your perspective.
+
+You could:
+
+RESPOND NOW - Share your immediate thinking, unpolished but authentic
+RESEARCH FIRST - Take time to deepen your knowledge before responding
+CONSULT AI - Ask your companion to draft a response you can send
+DEFER - Admit you're not the right person for this
+
+What do you do?
+        </div>
+
+        <div class="commands">
+COMMANDS:
+- RESPOND / RESEARCH / CONSULT / DEFER
+- ASK [question] (consult your AI companion)
+        </div>
+
+        ${aiResponse ? `<div class="ai-response">AI Companion: ${aiResponse}</div>` : ''}
+        ${error ? `<div class="error">${error}</div>` : ''}
+
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <input type="text" id="input" autofocus>
+        </div>
+      `);
+    }
+
+    function renderScenario3(aiResponse = null, error = null) {
+      render(`
+        <div class="title">
+          <div class="divider">====================================</div>
+          <div>CHAPTER 3: THE CREATION</div>
+          <div class="divider">====================================</div>
+        </div>
+
+        <div class="narrative">
+You must create something. An artifact that represents your understanding.
+
+The deadline is soon. The stakes feel real.
+
+You could:
+
+BUILD ROUGH - Create something imperfect but entirely yours
+BUILD WITH AI - Co-create with your companion, blending your vision with its fluency
+LET AI BUILD - Describe what you want, let the AI construct it
+SUBMIT NOTHING - Refuse to create under these conditions
+
+What do you do?
+        </div>
+
+        <div class="commands">
+COMMANDS:
+- ROUGH / COBUILD / DELEGATE / REFUSE
+- ASK [question] (consult your AI companion)
+        </div>
+
+        ${aiResponse ? `<div class="ai-response">AI Companion: ${aiResponse}</div>` : ''}
+        ${error ? `<div class="error">${error}</div>` : ''}
+
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <input type="text" id="input" autofocus>
+        </div>
+      `);
+    }
+
+    function renderTransition(outcome, chapter) {
+      render(`
+        <div class="narrative">
+${outcome}
+        </div>
+
+        <div class="divider">------------------------------------</div>
+
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <span>Press ENTER to continue</span>
+        </div>
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <input type="text" id="input" autofocus>
+        </div>
+      `);
+    }
+
+    function renderSocraticIntro() {
+      render(`
+        <div class="title socrates">
+          <div class="divider">====================================</div>
+          <div>S O C R A T E S</div>
+          <div class="divider">====================================</div>
+        </div>
+
+        <div class="narrative socrates">
+A figure appears. No face, only questions.
+
+"I have observed your journey. I have no judgment.
+ Only curiosity about how you see yourself."
+        </div>
+
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <span>Press ENTER to continue</span>
+        </div>
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <input type="text" id="input" autofocus>
+        </div>
+      `);
+    }
+
+    function renderSocraticQuestion() {
+      const question = gameState.currentSocraticQuestions[gameState.socraticQuestionIndex];
+
+      render(`
+        <div class="title socrates">
+          <div class="divider">====================================</div>
+          <div>S O C R A T E S</div>
+          <div class="divider">====================================</div>
+        </div>
+
+        <div class="narrative socrates">
+"${question.text}"
+        </div>
+
+        <div>
+          <textarea id="textarea" placeholder="Type your reflection and press ENTER..."></textarea>
+        </div>
+      `);
+    }
+
+    function renderSocraticOutro() {
+      render(`
+        <div class="narrative socrates">
+Socrates nods slowly.
+
+"I have no verdict. Only an observation:
+
+ The examined choice is not the same as the unexamined one,
+ even when the action is identical."
+
+The figure fades.
+        </div>
+
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <span>Press ENTER to continue</span>
+        </div>
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <input type="text" id="input" autofocus>
+        </div>
+      `);
+    }
+
+    function renderEnding() {
+      const patternSummary = generatePatternSummary();
+
+      let decisionsHTML = gameState.decisions.map((d, i) => `
+        <div class="history-entry">
+          <div>Chapter ${d.scenario}: ${d.situation}</div>
+          <div>Choice: ${d.choiceDescription}</div>
+          <div>AI consulted: ${d.aiConsultations > 0 ? 'Yes (' + d.aiConsultations + ' time' + (d.aiConsultations > 1 ? 's' : '') + ')' : 'No'}</div>
+        </div>
+      `).join('');
+
+      let reflectionsHTML = gameState.socraticResponses.map(r => `
+        <div class="reflection-entry">
+          <div><em>"${r.question.split('\n')[0]}..."</em></div>
+          <div style="margin-top: 10px;">Your response: ${r.response || '(no response)'}</div>
+        </div>
+      `).join('');
+
+      render(`
+        <div class="title">
+          <div class="divider">====================================</div>
+          <div>YOUR JOURNEY COMPLETE</div>
+          <div class="divider">====================================</div>
+        </div>
+
+        <div class="narrative">
+DECISIONS MADE: ${gameState.totalDecisions}
+AI CONSULTATIONS: ${gameState.aiUsageCount}
+SOCRATIC REFLECTIONS: ${gameState.socraticResponses.filter(r => r.response).length}
+        </div>
+
+        <div class="pattern-summary">
+YOUR PATTERN:
+${patternSummary}
+        </div>
+
+        <div class="divider">====================================</div>
+        <div class="title">YOUR DECISION HISTORY</div>
+        <div class="divider">====================================</div>
+
+        ${decisionsHTML}
+
+        <div class="divider">====================================</div>
+        <div class="title socrates">YOUR REFLECTIONS</div>
+        <div class="divider">====================================</div>
+
+        ${reflectionsHTML}
+
+        <div class="divider">====================================</div>
+
+        <div class="narrative">
+The game ends. The questions don't.
+        </div>
+
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <span>Press ENTER to play again</span>
+        </div>
+        <div class="input-line">
+          <span class="prompt">&gt;</span>
+          <input type="text" id="input" autofocus>
+        </div>
+
+        <div class="narrative" style="margin-top: 20px; opacity: 0.7;">
+Or close this window and notice what you're thinking.
+        </div>
+      `);
+    }
+
+    // Start the game
+    renderIntro();
+  </script>
+</body>
+</html>
